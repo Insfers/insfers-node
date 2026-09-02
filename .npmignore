@@ -1,0 +1,9 @@
+tests/
+.github/
+jest.config.js
+tsconfig.json
+tsup.config.ts
+*.log
+.env*
+.DS_Store
+scratch/

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+tests/live-*.ts
+tests/local-*.ts
+scratch/
