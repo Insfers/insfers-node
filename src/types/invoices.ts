@@ -35,6 +35,7 @@ export interface Invoice {
   subtotal: number;
   taxPercent?: number | null;
   total: number;
+  totalAmount?: number;
   currency: string;
   status: 'DRAFT' | 'SENT' | 'PAID' | 'VOID' | 'OVERDUE' | string;
   dueDate: string;

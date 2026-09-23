@@ -11,9 +11,13 @@ export class PayoutsResource extends BaseResource {
    * @param options Per-request options
    */
   async create(params: CreatePayoutParams, options?: RequestOptions): Promise<Payout> {
+    const payload = {
+      ...params,
+      amount: Number(Number(params.amount).toFixed(2)),
+    };
     return this.http.request<Payout>('/payouts', {
       method: 'POST',
-      body: params,
+      body: payload,
       ...options,
     });
   }

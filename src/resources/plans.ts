@@ -10,9 +10,18 @@ export class PlansResource extends BaseResource {
    * @param options Per-request options
    */
   async create(params: CreatePlanParams, options?: RequestOptions): Promise<Plan> {
+    const rawInterval = String(params.interval || params.billingInterval || 'MONTHLY').toUpperCase();
+    const payload = {
+      name: params.name,
+      price: Number(Number(params.price ?? params.amount ?? 0).toFixed(2)),
+      interval: rawInterval,
+      description: params.description,
+      trialDays: params.trialDays,
+    };
+
     return this.http.request<Plan>('/plans', {
       method: 'POST',
-      body: params,
+      body: payload,
       ...options,
     });
   }

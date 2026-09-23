@@ -1,16 +1,38 @@
+export type PlanInterval =
+  | 'HOURLY'
+  | 'DAILY'
+  | 'WEEKLY'
+  | 'BIWEEKLY'
+  | 'MONTHLY'
+  | 'QUARTERLY'
+  | 'YEARLY'
+  | 'hourly'
+  | 'daily'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+  | 'quarterly'
+  | 'yearly';
+
 export interface CreatePlanParams {
   name: string;
   description?: string;
-  amount: number;
+  price?: number;
+  amount?: number;
   currency?: string;
-  billingInterval: 'monthly' | 'yearly' | 'weekly';
+  interval?: PlanInterval | string;
+  billingInterval?: PlanInterval | string;
+  trialDays?: number;
   features?: string[];
 }
 
 export interface UpdatePlanParams {
   name?: string;
   description?: string;
+  price?: number;
   amount?: number;
+  interval?: PlanInterval | string;
+  trialDays?: number;
   features?: string[];
 }
 
@@ -47,6 +69,28 @@ export interface Subscription {
 }
 
 export interface SubscriptionDetail extends Subscription {
+  displayId?: string;
+  customerName?: string;
+  walletAddress?: string;
+  baseAmount?: number;
+  promoAmount?: number | null;
+  promoCyclesRemaining?: number | null;
+  amountLabel?: string;
+  chain?: string;
+  nextBillingAt?: string;
+  failedRetries?: number;
+  paymentHistory?: Array<{
+    id: string;
+    sequence: number;
+    occurredAt: string;
+    status: string;
+    amount: number;
+    amountLabel: string;
+    txHash?: string | null;
+    refundId?: string | null;
+    refundedAmount?: number | null;
+    refundReason?: string | null;
+  }>;
   customer?: {
     id: string;
     name: string;
@@ -54,3 +98,24 @@ export interface SubscriptionDetail extends Subscription {
   };
   plan?: Plan;
 }
+
+export interface RefundSubscriptionPaymentParams {
+  amount?: number;
+  reason?: string;
+  cancelSubscription?: boolean;
+}
+
+export interface RefundSubscriptionPaymentResponse {
+  ok: boolean;
+  sequence: number;
+  status: string;
+  refundedAmount: number;
+  subscriptionCancelled: boolean;
+  refund?: any;
+}
+
+export interface RetrySubscriptionResponse {
+  ok: boolean;
+  status: string;
+}
+

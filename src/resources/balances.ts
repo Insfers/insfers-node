@@ -24,4 +24,9 @@ export class BalancesResource extends BaseResource {
   async get(options?: RequestOptions): Promise<BalanceSummary> {
     return this.getSummary(options);
   }
+
+  /** Alias for getSummary() */
+  async retrieve(options?: RequestOptions): Promise<BalanceSummary> {
+    return this.getSummary(options);
+  }
 }

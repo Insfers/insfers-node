@@ -11,9 +11,13 @@ export class PaymentsResource extends BaseResource {
    * @param options Per-request options such as custom idempotencyKey or timeout
    */
   async create(params: CreatePaymentParams, options?: RequestOptions): Promise<Payment> {
+    const payload = {
+      ...params,
+      amount: Number(Number(params.amount).toFixed(2)),
+    };
     return this.http.request<Payment>('/payments', {
       method: 'POST',
-      body: params,
+      body: payload,
       ...options,
     });
   }

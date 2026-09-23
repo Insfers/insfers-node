@@ -4,6 +4,8 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     ai: 'src/ai.ts',
+    react: 'src/react/index.ts',
+    embed: 'src/embed.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

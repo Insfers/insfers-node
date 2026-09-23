@@ -203,6 +203,80 @@ await insfers.subscriptions.resume(subs[0].id);
 
 ---
 
+## B2B Checkout Suite (`@insfers/sdk/react` & `@insfers/sdk/embed`)
+
+> **Single-Use Architecture**: Insfers payment links expire after one use to prevent replay attacks and double payments. Client applications execute `createLink` on-demand when the customer clicks the checkout button to generate a fresh single-use payment link.
+
+Insfers provides two checkout paradigms:
+
+### Option 1: Sandboxed Checkout Modal (`InsfersCheckoutButton` / `InsfersIframeButton`)
+Zero Web3 or wallet dependencies required on the merchant site. Renders an isolated sandboxed modal communicating via verified cross-window `postMessage`.
+
+```tsx
+import React from 'react';
+import { InsfersCheckoutButton } from '@insfers/sdk/react';
+
+export function Checkout() {
+  return (
+    <InsfersCheckoutButton
+      createLink={async () => {
+        // Calls your backend route which invokes `insfers.paymentLinks.create(...)`
+        const res = await fetch('/api/checkout/create-link', { method: 'POST' });
+        const { token } = await res.json();
+        return token;
+      }}
+      shape="pill"
+      onSuccess={(res) => console.log('Paid via checkout modal!', res.txHash)}
+      onClose={() => console.log('Dismissed')}
+    />
+  );
+}
+```
+
+### Option 2: Inline Embedded Checkout (`InsfersEmbeddedCheckout`)
+Embeds the hosted checkout flow directly inside your page layout (e.g. within an existing checkout or subscription container).
+
+```tsx
+import React from 'react';
+import { InsfersEmbeddedCheckout } from '@insfers/sdk/react';
+
+export function Checkout() {
+  return (
+    <InsfersEmbeddedCheckout
+      createLink={async () => {
+        const res = await fetch('/api/checkout/create-link', { method: 'POST' });
+        const { token } = await res.json();
+        return token;
+      }}
+      height="640px"
+      onSuccess={(res) => console.log('Paid in-line!', res.txHash)}
+    />
+  );
+}
+```
+
+### Option 3: Vanilla JavaScript (`@insfers/sdk/embed`)
+For non-React platforms (Vanilla HTML, Shopify, Webflow, WordPress):
+
+```typescript
+import { openInsfersCheckout } from '@insfers/sdk/embed';
+
+const payBtn = document.getElementById('pay-btn');
+payBtn.addEventListener('click', () => {
+  openInsfersCheckout({
+    createLink: async () => {
+      const res = await fetch('/api/checkout/create-link', { method: 'POST' });
+      const { token } = await res.json();
+      return token;
+    },
+    onSuccess: (res) => console.log('Success:', res.txHash),
+    onClose: () => console.log('Dismissed'),
+  });
+});
+```
+
+---
+
 ## Autonomous Agent Commerce (x402 Protocol)
 
 The SDK provides native support for AI agents executing autonomous micropayments in response to **HTTP 402 Payment Required** challenges.

@@ -66,4 +66,47 @@ export class SubscriptionsResource extends BaseResource {
       ...options,
     });
   }
+
+  /**
+   * Selectively refunds a specific payment sequence in a subscription's billing history.
+   *
+   * @param id Subscription identifier
+   * @param sequence Payment cycle sequence number (e.g. 1 for first charge)
+   * @param params Optional refund amount, reason, or cancellation flag
+   * @param options Per-request options
+   */
+  async refundPayment(
+    id: string,
+    sequence: number,
+    params?: import('../types/subscriptions').RefundSubscriptionPaymentParams,
+    options?: RequestOptions,
+  ): Promise<import('../types/subscriptions').RefundSubscriptionPaymentResponse> {
+    return this.http.request<import('../types/subscriptions').RefundSubscriptionPaymentResponse>(
+      `/subscriptions/${id}/payments/${sequence}/refund`,
+      {
+        method: 'POST',
+        body: params,
+        ...options,
+      },
+    );
+  }
+
+  /**
+   * Manually retries a past due or failed recurring subscription charge.
+   *
+   * @param id Subscription identifier
+   * @param options Per-request options
+   */
+  async retry(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<import('../types/subscriptions').RetrySubscriptionResponse> {
+    return this.http.request<import('../types/subscriptions').RetrySubscriptionResponse>(
+      `/subscriptions/${id}/retry`,
+      {
+        method: 'POST',
+        ...options,
+      },
+    );
+  }
 }

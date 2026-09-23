@@ -14,8 +14,8 @@ export class InvoicesResource extends BaseResource {
     const rawItems = params.lineItems || params.items || [];
     const lineItems = rawItems.map((item) => ({
       description: item.description,
-      qty: item.qty ?? item.quantity ?? 1,
-      price: item.price ?? item.unitPrice ?? 0,
+      qty: Number(item.qty ?? item.quantity ?? 1),
+      price: Number(Number(item.price ?? item.unitPrice ?? 0).toFixed(2)),
     }));
 
     const payload = {
@@ -25,7 +25,7 @@ export class InvoicesResource extends BaseResource {
       lineItems,
       address: params.address || '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
       network: params.network || 'arc',
-      taxPercent: params.taxPercent || 0,
+      taxPercent: params.taxPercent !== undefined ? Number(params.taxPercent) : 0,
       currency: params.currency || 'USDC',
     };
 
@@ -38,6 +38,9 @@ export class InvoicesResource extends BaseResource {
     const rawInvoice = res.invoice || res;
     return {
       ...rawInvoice,
+      subtotal: rawInvoice.amount ?? rawInvoice.subtotal,
+      total: rawInvoice.total ?? rawInvoice.totalAmount,
+      totalAmount: rawInvoice.total ?? rawInvoice.totalAmount,
       invoiceNumber: rawInvoice.displayId || rawInvoice.invoiceNumber,
       paymentLink: res.paymentLink || rawInvoice.paymentLink,
     };

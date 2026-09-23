@@ -12,3 +12,8 @@ export * from './types';
 // Re-export pagination utilities
 export { listAutoPaging } from './pagination';
 export type { HttpClient } from './http';
+
+// Re-export Vanilla JS / Scriptable Hosted Checkout Overlay
+export { openInsfersCheckout } from './embed';
+export type { OpenCheckoutOptions } from './embed';
+

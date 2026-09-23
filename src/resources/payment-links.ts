@@ -17,7 +17,7 @@ export class PaymentLinksResource extends BaseResource {
 
     const payload = {
       name: params.name || params.title || 'Payment Link',
-      amount: params.amount,
+      amount: Number(Number(params.amount).toFixed(2)),
       network: primaryNetwork,
       networks: allNetworks,
       description: params.description,
@@ -27,6 +27,11 @@ export class PaymentLinksResource extends BaseResource {
       redirectUrl: params.redirectUrl,
       logoUrl: params.logoUrl,
       brandColor: params.brandColor,
+      type: params.type || 'ONE_TIME',
+      planId: params.planId,
+      interval: params.interval,
+      trialDays: params.trialDays,
+      gracePeriodDays: params.gracePeriodDays,
     };
 
     const res = await this.http.request<any>('/payment-links', {
@@ -72,4 +77,63 @@ export class PaymentLinksResource extends BaseResource {
       ...options,
     });
   }
+
+  /**
+   * Validates a promotional discount coupon code for a specific payment link.
+   *
+   * @param token Payment link public token
+   * @param code Promo coupon code (e.g. 'SUMMER50')
+   * @param options Per-request options
+   */
+  async validatePromo(
+    token: string,
+    code: string,
+    options?: RequestOptions,
+  ): Promise<import('../types/payment-links').ValidatePromoResponse> {
+    return this.http.request<import('../types/payment-links').ValidatePromoResponse>(
+      `/payment-links/${token}/validate-promo`,
+      {
+        method: 'POST',
+        body: { code },
+        ...options,
+      },
+    );
+  }
+
+  /**
+   * Confirms payment or subscription activation for a payment link.
+   *
+   * @param token Payment link public token
+   * @param params Confirmation payload (name, email, chain, txHash, promoCode, etc.)
+   * @param options Per-request options
+   */
+  async confirm(
+    token: string,
+    params: import('../types/payment-links').ConfirmPaymentLinkParams,
+    options?: RequestOptions,
+  ): Promise<any> {
+    return this.http.request<any>(`/payment-links/${token}/confirm`, {
+      method: 'POST',
+      body: params,
+      ...options,
+    });
+  }
+
+  /**
+   * Retrieves default or last-used payment link branding settings for the merchant.
+   *
+   * @param options Per-request options
+   */
+  async getDefaultBranding(
+    options?: RequestOptions,
+  ): Promise<import('../types/payment-links').PaymentLinkBranding> {
+    return this.http.request<import('../types/payment-links').PaymentLinkBranding>(
+      '/payment-links/default-branding',
+      {
+        method: 'GET',
+        ...options,
+      },
+    );
+  }
 }
+

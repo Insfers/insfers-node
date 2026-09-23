@@ -85,7 +85,10 @@ export class Insfers {
     }
 
     // 3. Protocol Security Enforcement
-    const baseUrl = finalConfig.baseUrl || 'https://api.insfers.com';
+    const baseUrl =
+      finalConfig.baseUrl ||
+      (typeof process !== 'undefined' ? process.env.INSFERS_BASE_URL : undefined) ||
+      'https://develop.insfers.com';
     const isLocalhost =
       baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1') || baseUrl.includes('0.0.0.0');
 
@@ -95,7 +98,7 @@ export class Insfers {
       );
     }
 
-    this.http = new HttpClient(trimmedKey, finalConfig);
+    this.http = new HttpClient(trimmedKey, { ...finalConfig, baseUrl });
 
     // Initialize all 9 core B2B resource modules + Agent commerce
     this.payments = new PaymentsResource(this.http);

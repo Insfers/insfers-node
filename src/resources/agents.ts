@@ -62,11 +62,13 @@ export class AgentCommerceResource extends BaseResource {
     try {
       const parsed = JSON.parse(header);
       if (parsed.amount && (parsed.recipientAddress || parsed.address)) {
+        const rawAmt = String(parsed.amount).replace(/^["']|["']$/g, '').trim();
+        const parsedAmt = parseFloat(rawAmt);
         return {
-          amount: parseFloat(parsed.amount),
-          recipientAddress: parsed.recipientAddress || parsed.address,
-          blockchain: parsed.blockchain || parsed.network || 'ARC-TESTNET',
-          currency: parsed.currency || 'USDC',
+          amount: Number(parsedAmt.toFixed(6)),
+          recipientAddress: String(parsed.recipientAddress || parsed.address).trim(),
+          blockchain: String(parsed.blockchain || parsed.network || 'ARC-TESTNET').trim(),
+          currency: String(parsed.currency || 'USDC').trim(),
           resourceUri: parsed.resourceUri,
         };
       }
@@ -80,11 +82,13 @@ export class AgentCommerceResource extends BaseResource {
     for (const pair of pairs) {
       const [k, ...v] = pair.split('=');
       if (k && v.length > 0) {
-        dict[k.trim().toLowerCase()] = v.join('=').trim();
+        const val = v.join('=').trim().replace(/^["']|["']$/g, '');
+        dict[k.trim().toLowerCase()] = val;
       }
     }
 
-    const amount = parseFloat(dict['amount'] || '0');
+    const rawAmount = (dict['amount'] || '0').replace(/^["']|["']$/g, '').trim();
+    const amount = Number(parseFloat(rawAmount).toFixed(6));
     const recipientAddress = dict['address'] || dict['recipient'] || dict['recipientaddress'];
     const blockchain = dict['network'] || dict['blockchain'] || 'ARC-TESTNET';
     const currency = dict['currency'] || 'USDC';

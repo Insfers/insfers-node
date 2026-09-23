@@ -17,6 +17,16 @@ describe('AgentCommerceResource & x402 Protocol', () => {
     expect(parsed.currency).toBe('USDC');
   });
 
+  it('correctly decodes quoted RFC format x402 challenge headers', () => {
+    const header = 'amount="10.50", address="0x742d35Cc6634C0532925a3b844Bc454e4438f44e", network="BASE-SEPOLIA", currency="USDC"';
+    const parsed = agents.parse402Header(header);
+
+    expect(parsed.amount).toBe(10.5);
+    expect(parsed.recipientAddress).toBe('0x742d35Cc6634C0532925a3b844Bc454e4438f44e');
+    expect(parsed.blockchain).toBe('BASE-SEPOLIA');
+    expect(parsed.currency).toBe('USDC');
+  });
+
   it('correctly decodes JSON formatted x402 challenge headers', () => {
     const jsonHeader = JSON.stringify({
       amount: '2.50',
