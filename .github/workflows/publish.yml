@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   publish:
-    name: Build and Publish @insfers/sdk
+    name: Build and Stage Publish @insfers/sdk
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +22,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -34,7 +34,5 @@ jobs:
       - name: Build distribution
         run: npm run build
 
-      - name: Publish to NPM
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Stage Publish to NPM via Trusted Publisher (OIDC)
+        run: npm stage publish
