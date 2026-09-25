@@ -10,6 +10,38 @@ import { INSFERS_MARK_INVERTED, INSFERS_MARK_STANDARD } from './logo';
 
 export { INSFERS_MARK_INVERTED, INSFERS_MARK_STANDARD };
 
+/** Escape HTML entities to prevent XSS when interpolating into innerHTML. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Injects the Neulis @font-face declaration if not already present.
+ * Loads the Bold weight from the Insfers checkout CDN — adds zero bytes to the SDK bundle.
+ * Falls back gracefully to Inter → system fonts if the CDN is unreachable.
+ */
+function ensureNeulisFontFace(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('insfers-neulis-font')) return;
+  const style = document.createElement('style');
+  style.id = 'insfers-neulis-font';
+  style.textContent = `
+    @font-face {
+      font-family: "Neulis";
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+      src: url("https://checkout.insfers.com/fonts/neulis-700.otf") format("opentype");
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export interface OpenCheckoutOptions {
   /**
    * Dynamic on-demand link generator callback (Required / Recommended).
@@ -88,6 +120,14 @@ export function openInsfersCheckout(options: OpenCheckoutOptions): { close: () =
   }
 
   const { link: initialLink, createLink, baseUrl, onSuccess, onError, onClose, onReady } = options;
+
+  // Enforce single-use architecture: at least one link source must be provided
+  if (!createLink && !initialLink) {
+    throw new Error(
+      'Insfers: Either `createLink` (recommended) or `link` must be provided. ' +
+      'Payment links are single-use; use `createLink` to generate fresh sessions on demand.'
+    );
+  }
 
   // Create overlay backdrop
   const overlay = document.createElement('div');
@@ -236,6 +276,14 @@ export function createInsfersButton(options: InsfersButtonOptions = {}): HTMLBut
     throw new Error('createInsfersButton can only be called in a browser environment.');
   }
 
+  // Enforce single-use architecture: at least one link source must be provided
+  if (!options.createLink && !options.link) {
+    throw new Error(
+      'Insfers: Either `createLink` (recommended) or `link` must be provided. ' +
+      'Payment links are single-use; use `createLink` to generate fresh sessions on demand.'
+    );
+  }
+
   const {
     shape = 'pill',
     fullWidth = false,
@@ -247,9 +295,23 @@ export function createInsfersButton(options: InsfersButtonOptions = {}): HTMLBut
 
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.setAttribute('aria-label', `Pay with ${label}`);
+  btn.setAttribute('aria-label', `Pay with ${escapeHtml(label)}`);
 
   const borderRadius = shape === 'pill' ? '9999px' : shape === 'rounded' ? '14px' : '4px';
+
+  // Load Neulis (brand font) from Insfers CDN — zero bundle cost
+  ensureNeulisFontFace();
+
+  // Ensure Inter (fallback) is loaded if not already present
+  if (!document.getElementById('insfers-btn-font')) {
+    const fontLink = document.createElement('link');
+    fontLink.id = 'insfers-btn-font';
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap';
+    document.head.appendChild(fontLink);
+  }
+
+  const fontFamily = '"Neulis", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
   Object.assign(btn.style, {
     display: 'inline-flex',
@@ -264,7 +326,7 @@ export function createInsfersButton(options: InsfersButtonOptions = {}): HTMLBut
     color: '#FFFFFF',
     border: 'none',
     borderRadius,
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif',
+    fontFamily,
     fontSize: '16px',
     fontWeight: '700',
     letterSpacing: '-0.015em',
@@ -278,33 +340,53 @@ export function createInsfersButton(options: InsfersButtonOptions = {}): HTMLBut
     WebkitTapHighlightColor: 'transparent',
     ...style,
   });
+  btn.style.setProperty('font-family', fontFamily, 'important');
 
   if (className) {
     btn.className = className;
   }
 
   // Set default button inner content with official logo mark
+  // Uses safe DOM construction to prevent XSS via label injection.
   const renderNormalContent = () => {
-    btn.innerHTML = `
-      <img
-        src="${INSFERS_MARK_INVERTED}"
-        alt="Insfers Mark"
-        width="22"
-        height="22"
-        style="width:22px; height:22px; border-radius:50%; object-fit:contain; display:inline-block; vertical-align:middle; pointer-events:none; flex-shrink:0;"
-        draggable="false"
-      />
-      <span style="font-weight:700; letter-spacing:-0.015em; color:#FFFFFF;">${label}</span>
-    `;
+    btn.textContent = '';
+    const img = document.createElement('img');
+    img.src = INSFERS_MARK_INVERTED;
+    img.alt = 'Insfers';
+    img.width = 22;
+    img.height = 22;
+    img.draggable = false;
+    Object.assign(img.style, {
+      width: '22px', height: '22px', borderRadius: '50%', objectFit: 'contain',
+      display: 'inline-block', verticalAlign: 'middle', pointerEvents: 'none', flexShrink: '0',
+    });
+    const span = document.createElement('span');
+    span.textContent = label; // Safe — textContent never parses HTML
+    Object.assign(span.style, {
+      fontFamily: `${fontFamily}`, fontWeight: '700', fontSize: '16px',
+      letterSpacing: '-0.015em', color: '#FFFFFF', lineHeight: '1', verticalAlign: 'middle',
+    });
+    span.style.setProperty('font-family', fontFamily, 'important');
+    btn.appendChild(img);
+    btn.appendChild(span);
   };
 
   const renderSpinner = () => {
-    btn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="animation:insfers-btn-spin 0.75s linear infinite; display:block;">
-        <circle cx="12" cy="12" r="9.5" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2.5"></circle>
-        <path d="M12 2.5A9.5 9.5 0 0 1 21.5 12" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
-      </svg>
-    `;
+    btn.textContent = '';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '20');
+    svg.setAttribute('height', '20');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    Object.assign(svg.style, { animation: 'insfers-btn-spin 0.75s linear infinite', display: 'block' });
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '9.5');
+    circle.setAttribute('stroke', 'rgba(255, 255, 255, 0.25)'); circle.setAttribute('stroke-width', '2.5');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M12 2.5A9.5 9.5 0 0 1 21.5 12');
+    path.setAttribute('stroke', '#FFFFFF'); path.setAttribute('stroke-width', '2.5'); path.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(circle); svg.appendChild(path);
+    btn.appendChild(svg);
   };
 
   renderNormalContent();

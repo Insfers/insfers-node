@@ -2,7 +2,6 @@
 
 [![npm version](https://img.shields.io/npm/v/@insfers/sdk.svg?style=flat-square)](https://www.npmjs.com/package/@insfers/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
-[![CI Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg?style=flat-square)](https://github.com/Insfers/insfers-node)
 
 The official **Node.js & TypeScript SDK** for [Insfers](https://insfers.com).
 
@@ -12,14 +11,17 @@ The official **Node.js & TypeScript SDK** for [Insfers](https://insfers.com).
 - [Key Features](#key-features)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+- [Supported Networks Reference](#supported-networks-reference)
 - [Core Payment Modules](#core-payment-modules)
   - [Payments & Cross-Chain Transfers](#1-payments--transfers)
   - [Payment Links & Hosted Checkout](#2-payment-links--hosted-checkout)
   - [Customer Management](#3-customer-crm)
   - [Invoicing & PDF Streaming](#4-invoices--pdf-generation)
   - [Payouts & Disbursements](#5-payouts--disbursements)
-  - [Treasury Balances](#6-treasury-balances)
-  - [Subscriptions & Recurring Billing](#7-subscriptions--plans)
+  - [Refunds & Claims](#6-refunds--claims)
+  - [Treasury Balances](#7-treasury-balances)
+  - [Subscriptions & Recurring Billing](#8-subscriptions--plans)
+- [B2B Checkout Suite (@insfers/sdk/react & @insfers/sdk/embed)](#b2b-checkout-suite-insferssdkreact--insferssdkembed)
 - [Autonomous Agent Commerce (x402 Protocol)](#autonomous-agent-commerce-x402-protocol)
 - [AI Tool Calling & LLM Integrations](#ai-tool-calling--llm-integrations)
 - [Idempotency & Financial Safety](#idempotency--financial-safety)
@@ -57,6 +59,16 @@ yarn add @insfers/sdk
 bun add @insfers/sdk
 ```
 
+### Environment Configuration (`.env`)
+
+Obtain your secret API key (`sk_live_...` or `sk_test_...`) from the **[Insfers Developer Dashboard](https://dashboard.insfers.com/developers)**. If you don't already have one, sign up and generate an API key in the Developers tab.
+
+```env
+# Required: Secret API key from https://dashboard.insfers.com/developers
+INSFERS_API_KEY=sk_live_... # or sk_test_... for sandbox
+
+```
+
 ---
 
 ## Quickstart
@@ -64,24 +76,43 @@ bun add @insfers/sdk
 ```typescript
 import Insfers from '@insfers/sdk';
 
-// Initialize the client with your merchant API key (sk_test_... or sk_live_...)
-const insfers = new Insfers(process.env.INSFERS_API_KEY!);
+// Automatically reads process.env.INSFERS_API_KEY, or configure explicitly
+const insfers = new Insfers({
+  apiKey: process.env.INSFERS_API_KEY!,
+  baseUrl: process.env.INSFERS_BASE_URL || 'https://develop.insfers.com',
+  timeout: 30000,   // 30s timeout
+  maxRetries: 3,    // Auto retry on 429 and transient 5xx errors with exponential backoff
+});
 
 async function main() {
   // Create a multi-chain payment link (settles to merchant's Arc balance)
   const link = await insfers.paymentLinks.create({
     title: 'Enterprise Annual License',
     amount: 499.00,
-    acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA'],
+    acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'POLYGON-AMOY', 'ARB-SEPOLIA', 'SOLANA-DEVNET'],
     description: 'Instant USDC payment link with automated deposit provisioning',
   });
 
   console.log('Payment Link ID:', link.id);
   console.log('Checkout URL:', link.url);
+  console.log('Checkout Token:', link.token);
 }
 
 main().catch(console.error);
 ```
+
+---
+
+## Supported Networks Reference
+
+| Network Identifier | Chain Type | Settlement Speed | Primary Asset |
+| :--- | :--- | :--- | :--- |
+| `ARC-TESTNET` | Arc L1 (Primary) | Sub-second | USDC / EURC |
+| `BASE-SEPOLIA` | EVM L2 | ~2 seconds | USDC |
+| `ETH-SEPOLIA` | EVM L1 | ~12 seconds | USDC |
+| `POLYGON-AMOY` | EVM L2 | ~2 seconds | USDC |
+| `ARB-SEPOLIA` | EVM L2 | ~1 second | USDC |
+| `SOLANA-DEVNET` | SVM | Sub-second | USDC |
 
 ---
 
@@ -172,7 +203,26 @@ const payout = await insfers.payouts.create({
 console.log('Payout Status:', payout.status);
 ```
 
-### 6. Treasury Balances
+### 6. Refunds & Claims
+Issue on-chain USDC refunds directly or generate customer self-claim refund links.
+
+```typescript
+// Create a customer claimable refund link
+const refund = await insfers.refunds.create({
+  paymentId: 'pay_123',
+  amount: 75.00,
+  reason: 'Customer requested refund',
+  claimable: true,
+});
+
+console.log('Claim Token:', refund.claimToken);
+console.log('Claim URL:', refund.claimUrl);
+
+// Retrieve refund status
+const status = await insfers.refunds.retrieve(refund.id);
+```
+
+### 7. Treasury Balances
 Query real-time USDC balances aggregated across all provisioned Circle treasury wallets.
 
 ```typescript
@@ -183,7 +233,7 @@ for (const chain of balances.chains) {
 }
 ```
 
-### 7. Subscriptions & Plans
+### 8. Subscriptions & Plans
 Create recurring subscription plans and manage subscriber lifecycle.
 
 ```typescript
@@ -207,7 +257,7 @@ await insfers.subscriptions.resume(subs[0].id);
 
 > **Single-Use Architecture**: Insfers payment links expire after one use to prevent replay attacks and double payments. Client applications execute `createLink` on-demand when the customer clicks the checkout button to generate a fresh single-use payment link.
 
-Insfers provides two checkout paradigms:
+Insfers provides three client integration options to accept multi-chain payments:
 
 ### Option 1: Sandboxed Checkout Modal (`InsfersCheckoutButton` / `InsfersIframeButton`)
 Zero Web3 or wallet dependencies required on the merchant site. Renders an isolated sandboxed modal communicating via verified cross-window `postMessage`.
@@ -225,7 +275,7 @@ export function Checkout() {
         const { token } = await res.json();
         return token;
       }}
-      shape="pill"
+      shape="pill" // 'pill' | 'rounded' | 'square'
       onSuccess={(res) => console.log('Paid via checkout modal!', res.txHash)}
       onClose={() => console.log('Dismissed')}
     />
@@ -255,8 +305,36 @@ export function Checkout() {
 }
 ```
 
-### Option 3: Vanilla JavaScript (`@insfers/sdk/embed`)
-For non-React platforms (Vanilla HTML, Shopify, Webflow, WordPress):
+### Option 3: Vanilla JavaScript & Script Tag (`@insfers/sdk/embed`)
+For non-React platforms (Vanilla HTML, Shopify, Webflow, WordPress, Vue, Svelte).
+
+#### 3A. Recommended: Mount the Official Branded Checkout Button (`renderInsfersButton`)
+Automatically renders the official Electric Blue pill button with the white circular logo mark and binds the sandboxed checkout modal overlay:
+
+```html
+<!-- Container element for the button -->
+<div id="insfers-checkout-container"></div>
+
+<script type="module">
+  import { renderInsfersButton } from '@insfers/sdk/embed';
+
+  renderInsfersButton('#insfers-checkout-container', {
+    createLink: async () => {
+      const res = await fetch('/api/checkout/create-link', { method: 'POST' });
+      const { token } = await res.json();
+      return token;
+    },
+    shape: 'pill', // 'pill' | 'rounded' | 'square'
+    fullWidth: false,
+    onSuccess: (res) => console.log('Payment successful!', res.txHash),
+    onError: (err) => alert(`Error: ${err.message}`),
+    onClose: () => console.log('Checkout dismissed'),
+  });
+</script>
+```
+
+#### 3B. Programmatic Modal Launch (`openInsfersCheckout`)
+Trigger the checkout modal from any custom UI or button click handler:
 
 ```typescript
 import { openInsfersCheckout } from '@insfers/sdk/embed';
@@ -337,6 +415,8 @@ const response = await openai.chat.completions.create({
 ---
 
 ## Idempotency & Financial Safety
+
+> **Idempotency is automatic for all network retries.** Passing an explicit `idempotencyKey` is optional and only needed to bind payments to your own external Order IDs.
 
 To protect against duplicate charges or payouts caused by network timeouts, all mutating requests support idempotency:
 

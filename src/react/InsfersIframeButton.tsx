@@ -3,6 +3,27 @@ import { InsfersMark } from './InsfersMark';
 import { InsfersIframeModal } from './InsfersIframeModal';
 import { resolveCheckoutUrl, prefetchCheckout } from '../checkout-url';
 
+/**
+ * Injects the Neulis @font-face declaration from Insfers CDN if not already present.
+ * Zero bundle cost — the font file is loaded lazily by the browser on first render.
+ */
+function ensureNeulisFontFace(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('insfers-neulis-font')) return;
+  const style = document.createElement('style');
+  style.id = 'insfers-neulis-font';
+  style.textContent = `
+    @font-face {
+      font-family: "Neulis";
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+      src: url("https://checkout.insfers.com/fonts/neulis-700.otf") format("opentype");
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export interface InsfersIframeButtonProps {
   /**
    * Dynamic on-demand link generator callback (Required / Recommended).
@@ -109,6 +130,21 @@ export const InsfersIframeButton: React.FC<InsfersIframeButtonProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
 
+  // Inject Neulis brand font from CDN on mount (zero bundle cost)
+  useEffect(() => {
+    ensureNeulisFontFace();
+  }, []);
+
+  // Enforce single-use architecture: warn developers if using static link without createLink
+  useEffect(() => {
+    if (!createLink && !initialLink) {
+      console.error(
+        '[Insfers SDK] Either `createLink` (recommended) or `link` must be provided. ' +
+        'Payment links are single-use; use `createLink` to generate fresh sessions on demand.'
+      );
+    }
+  }, [createLink, initialLink]);
+
   useEffect(() => {
     if (initialLink) setActiveLink(initialLink);
   }, [initialLink]);
@@ -193,7 +229,7 @@ export const InsfersIframeButton: React.FC<InsfersIframeButtonProps> = ({
           border: 'none',
           borderRadius,
           fontFamily:
-            '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif',
+            '"Neulis", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           fontSize: '16px',
           fontWeight: 700,
           letterSpacing: '-0.015em',
