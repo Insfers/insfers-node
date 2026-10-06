@@ -9,7 +9,7 @@ export interface InsfersConfig {
 
   /**
    * The base URL for the Insfers API.
-   * Defaults to 'https://api.insfers.com'.
+   * Defaults to 'https://api.insfers.com' (or override via process.env.INSFERS_BASE_URL).
    */
   baseUrl?: string;
 

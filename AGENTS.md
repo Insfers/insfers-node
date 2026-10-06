@@ -10,7 +10,7 @@
 `@insfers/sdk` is the official client for **Insfers B2B Cross-Chain Payments, Multi-Chain Treasury, Recurring Subscriptions, and Agentic Commerce**.
 
 ### ⚠️ HARD RULES FOR AI AGENTS & DEVELOPERS
-1. **SERVER-SIDE ONLY FOR SECRET KEYS**: Never import or invoke `@insfers/sdk` inside client-side browser components (`React`, `Vue`, `Svelte`, browser window). The core SDK includes a built-in guard that throws `SecurityError` if `window` or `document` is detected to prevent secret key leakage. Execute SDK operations exclusively inside Next.js Server Actions, Route Handlers, Express, NestJS, or Cloudflare Workers.
+1. **SERVER-SIDE ONLY FOR SECRET KEYS**: Never import or invoke `@insfers/sdk` inside client-side browser components (`React`, `Vue`, `Svelte`, browser window). The core SDK includes a built-in guard that throws an error if `window` or `document` is detected to prevent secret key leakage. Execute SDK operations exclusively inside Next.js Server Actions, Route Handlers, Express, NestJS, or Cloudflare Workers.
 2. **CLIENT-SIDE CHECKOUT SUITE**: For browser-facing UI, import exclusively from `@insfers/sdk/react` (`InsfersCheckoutButton`, `InsfersEmbeddedCheckout`) or `@insfers/sdk/embed` (`renderInsfersButton`, `openInsfersCheckout`). These components package the official branded checkout button and sandboxed modal, require zero API keys, and communicate securely with the Insfers checkout sandbox via verified, origin-locked `postMessage`.
 3. **ENVIRONMENT VARIABLES**: Always read the secret API key from `process.env.INSFERS_API_KEY`.
 4. **CURRENCY STANDARD**: All amounts are standard decimal numbers denominated in **USDC** (e.g. `10.50` represents $10.50 USDC).
@@ -30,8 +30,8 @@ npm install @insfers/sdk
 # Required: Your secret API key from dashboard.insfers.com (Developer tab)
 INSFERS_API_KEY=sk_live_... # or sk_test_... for sandbox
 
-# Optional: Base API URL override (defaults to https://develop.insfers.com)
-INSFERS_BASE_URL=https://develop.insfers.com
+# Optional: Base API URL override (defaults to https://api.insfers.com)
+# INSFERS_BASE_URL=https://api.insfers.com
 ```
 
 ### Initialization
@@ -40,12 +40,12 @@ INSFERS_BASE_URL=https://develop.insfers.com
 import Insfers from '@insfers/sdk';
 
 // Automatically reads process.env.INSFERS_API_KEY
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
-// Or explicit configuration
+// Or explicit configuration options
 const insfers = new Insfers({
   apiKey: process.env.INSFERS_API_KEY!,
-  baseUrl: process.env.INSFERS_BASE_URL || 'https://develop.insfers.com',
+  baseUrl: process.env.INSFERS_BASE_URL || 'https://api.insfers.com',
   timeout: 30000,   // 30s timeout
   maxRetries: 3,    // Auto retry on 429 and transient 5xx errors with exponential backoff
 });
@@ -56,18 +56,20 @@ const insfers = new Insfers({
 ## 3. Core Backend SDK Recipes
 
 ### Recipe A: Query Real-Time Vault Balances
-Retrieves multi-chain balances across all merchant vaults (Arc, Ethereum, Base, Polygon, Arbitrum, Solana).
+Retrieves aggregated live multi-chain balances across all merchant treasury vaults (Arc, Ethereum, Base, Polygon, Arbitrum, Solana).
 
 ```typescript
 import Insfers from '@insfers/sdk';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function checkBalances() {
   const balances = await insfers.balances.retrieve();
   
+  console.log(`Treasury Total: $${balances.totalUsdc} USDC | Available: $${balances.availableUsdc} USDC`);
+
   for (const chain of balances.chains) {
-    console.log(`[${chain.network}] Total: ${chain.total} USDC | Available: ${chain.available} USDC`);
+    console.log(`[${chain.blockchain}] Wallet: ${chain.walletAddress} | Balance: ${chain.amount} ${chain.currency}`);
   }
 }
 ```
@@ -80,13 +82,13 @@ Generates a payment link with instant deposit wallet resolution for customer che
 ```typescript
 import Insfers from '@insfers/sdk';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function createCheckoutLink() {
   const link = await insfers.paymentLinks.create({
     title: 'Enterprise Annual Subscription',
     amount: 1200.00,
-    acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA'],
+    acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'POLYGON-AMOY', 'ARB-SEPOLIA', 'SOLANA-DEVNET'],
     description: 'Instant B2B software license with automated cross-chain settlement',
     redirectUrl: 'https://your-app.com/checkout/success',
   });
@@ -100,14 +102,14 @@ async function createCheckoutLink() {
 
 ---
 
-### Recipe C: Issue a B2B Invoice & Stream PDF
-Issues a formal tax-calculated invoice and retrieves the raw PDF stream.
+### Recipe C: Issue a B2B Invoice & Download PDF
+Issues a formal tax-calculated invoice and retrieves the raw PDF binary buffer.
 
 ```typescript
 import Insfers from '@insfers/sdk';
 import * as fs from 'fs';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function issueInvoice() {
   const invoice = await insfers.invoices.create({
@@ -119,14 +121,14 @@ async function issueInvoice() {
       { description: 'Custom Smart Contract Security Audit', qty: 1, price: 2500.00 },
     ],
     taxPercent: 5.0,
-    network: 'arc',
+    network: 'ARC-TESTNET',
   });
 
-  console.log(`Invoice ${invoice.invoiceNumber} created. Total: $${invoice.totalAmount} USDC`);
+  console.log(`Invoice ${invoice.displayId || invoice.invoiceNumber} created. Total: $${invoice.total} USDC`);
 
-  // Download PDF binary buffer
+  // Download PDF binary buffer and persist to disk
   const pdfBuffer = await insfers.invoices.downloadPdf(invoice.id);
-  fs.writeFileSync(`invoice_${invoice.invoiceNumber}.pdf`, pdfBuffer);
+  fs.writeFileSync(`invoice_${invoice.displayId || invoice.id}.pdf`, Buffer.from(pdfBuffer));
   console.log('Saved invoice PDF to disk.');
 }
 ```
@@ -139,15 +141,14 @@ Disburses USDC to an external contractor or vendor wallet on any supported block
 ```typescript
 import Insfers from '@insfers/sdk';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function disburseVendorPayout() {
   const payout = await insfers.payouts.create({
-    recipientName: 'Security Researcher Alice',
-    walletAddress: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    recipientAddress: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
     amount: 500.00,
     blockchain: 'ARC-TESTNET',
-    reason: 'Bug bounty program payout #412',
+    description: 'Bug bounty program payout #412',
   });
 
   console.log(`Payout initiated! ID: ${payout.id}, Status: ${payout.status}`);
@@ -162,7 +163,7 @@ Manage automated recurring USDC subscriptions, billing cycles, and selective seq
 ```typescript
 import Insfers from '@insfers/sdk';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 // 1. Create a Recurring Billing Plan
 async function createPlan() {
@@ -182,11 +183,12 @@ async function manageSubscriptions() {
   const subscriptions = await insfers.subscriptions.list();
 
   for (const sub of subscriptions) {
-    console.log(`Sub [${sub.id}]: Status=${sub.status}, Amount=$${sub.amount} USDC`);
+    console.log(`Sub [${sub.id}]: Status=${sub.status}, Plan=${sub.planId}`);
   }
 
-  // Retrieve detailed billing history
+  // Retrieve detailed subscription and billing history
   const detail = await insfers.subscriptions.retrieve('sub_123');
+  console.log(`Customer: ${detail.customerName} | Next Billing: ${detail.nextBillingAt}`);
   console.log('Payment history cycles:', detail.paymentHistory?.length);
 
   // Pause / Resume / Cancel
@@ -210,10 +212,10 @@ Allows autonomous AI agents to parse and pay HTTP 402 Payment Required challenge
 ```typescript
 import Insfers from '@insfers/sdk';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function accessPaidAgentService(targetUrl: string) {
-  // Step 1: Query endpoint; if HTTP 402 is returned, parse the challenge
+  // Step 1: Query endpoint; if HTTP 402 is returned, parse the challenge header
   const response = await fetch(targetUrl);
 
   if (response.status === 402) {
@@ -221,12 +223,22 @@ async function accessPaidAgentService(targetUrl: string) {
       response.headers.get('WWW-Authenticate') ||
       response.headers.get('x-402-challenge');
     
-    // Parse challenge parameters
-    const parsedChallenge = insfers.agents.parse402Challenge(challengeHeader);
-    console.log(`Service requires ${parsedChallenge.amount} USDC on ${parsedChallenge.network}`);
+    if (!challengeHeader) {
+      throw new Error('HTTP 402 received without challenge header');
+    }
 
-    // Step 2: Settle payment autonomously
-    const payment = await insfers.agents.pay402Challenge(parsedChallenge);
+    // Parse challenge parameters (amount, recipientAddress, blockchain, resourceUri)
+    const challenge = insfers.agents.parse402Header(challengeHeader);
+    console.log(`Service requires ${challenge.amount} USDC on ${challenge.blockchain}`);
+
+    // Step 2: Settle payment autonomously within authorized budget
+    const payment = await insfers.agents.pay402({
+      challenge,
+      maxBudgetUsdc: 5.00, // Budget guardrail prevents unauthorized agent overspending
+      description: 'Autonomous payment for context retrieval service',
+    });
+
+    console.log(`Payment confirmed! TxHash: ${payment.txHash}`);
 
     // Step 3: Re-request the protected resource with proof of payment
     const authorizedResponse = await fetch(targetUrl, {
@@ -244,9 +256,61 @@ async function accessPaidAgentService(targetUrl: string) {
 
 ---
 
+### Recipe G: Direct On-Chain Payments & Transfers
+Initiate on-chain custodial USDC transfers on Arc or sync settlement across supported networks.
+
+```typescript
+import Insfers from '@insfers/sdk';
+
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
+
+async function disbursePayment() {
+  const payment = await insfers.payments.create({
+    amount: 25.50,
+    destination: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    blockchain: 'ARC-TESTNET',
+    description: 'API Usage Tier Upgrade',
+  });
+
+  console.log(`Payment created: ID ${payment.id} | Status: ${payment.status}`);
+}
+```
+
+---
+
+### Recipe H: Direct Refunds & Claimable Customer Refund Links
+Issue refunds directly back to customer wallets or generate claimable refund links.
+
+```typescript
+import Insfers from '@insfers/sdk';
+
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
+
+async function processRefund(paymentId: string) {
+  // 1. Direct on-chain refund to original payer wallet
+  const directRefund = await insfers.refunds.create({
+    paymentId,
+    amount: 50.00,
+    reason: 'Customer requested order cancellation',
+  });
+  console.log(`Refund initiated: ID ${directRefund.id} | Status: ${directRefund.status}`);
+
+  // 2. Or create a claimable refund link for the customer
+  const claimable = await insfers.refunds.create({
+    paymentId,
+    amount: 50.00,
+    claimable: true,
+    reason: 'Disputed service fee compensation',
+  });
+  console.log(`Customer Claim Link: ${claimable.claimUrl}`);
+}
+```
+
+---
+
 ## 4. Client-Side Hosted Checkout Suite (`@insfers/sdk/react` & `@insfers/sdk/embed`)
 
-Insfers provides three zero-dependency integration options to accept multi-chain payments:
+Insfers provides zero-dependency client-side integration options to accept multi-chain payments:
 - **Zero Web3 Dependencies**: No `wagmi`, `ethers`, `viem`, or `@solana/web3.js` needed in your merchant frontend.
 - **Full Wallet Support**: The modal iframe natively handles MetaMask, Coinbase Wallet, Phantom, Rainbow, WalletConnect, and mobile QR scans.
 - **Origin-Locked Security**: Cross-window `postMessage` protocol strictly verifies sender window identity (`e.source === iframe.contentWindow`) and validates expected origin.
@@ -263,7 +327,7 @@ Drops an Apple Pay-style checkout button into any React application. Clicking it
 import { NextResponse } from 'next/server';
 import Insfers from '@insfers/sdk';
 
-const insfers = new Insfers();
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 export async function POST() {
   try {
@@ -271,7 +335,7 @@ export async function POST() {
     const link = await insfers.paymentLinks.create({
       title: 'Pro Annual Plan',
       amount: 99.00,
-      acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'SOLANA-DEVNET'],
+      acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'POLYGON-AMOY', 'ARB-SEPOLIA', 'SOLANA-DEVNET'],
     });
 
     return NextResponse.json({ token: link.token });
@@ -322,11 +386,11 @@ export function PricingCard() {
 
 | Prop | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `createLink` | `() => Promise<string \| { token: string }>` | **Required** | Async function invoked on click to generate a fresh single-use payment token. |
+| `createLink` | `() => Promise<string \| { token?: string }>` | **Required** | Async function invoked on click to generate a fresh single-use payment token. |
 | `shape` | `'pill' \| 'rounded' \| 'square'` | `'pill'` | Button border radius style. |
 | `fullWidth` | `boolean` | `false` | Stretches button to 100% of container width. |
 | `disabled` | `boolean` | `false` | Disables interaction and button clicks. |
-| `onSuccess` | `(result: PaymentResult) => void` | `undefined` | Callback fired upon verified on-chain payment settlement. |
+| `onSuccess` | `(result: { txHash?: string; token?: string; amount?: number; currency?: string; chain?: string }) => void` | `undefined` | Callback fired upon verified on-chain payment settlement. |
 | `onError` | `(error: Error) => void` | `undefined` | Callback fired on checkout error or failed initialization. |
 | `onClose` | `() => void` | `undefined` | Callback fired when customer dismisses the modal or presses ESC. |
 | `onReady` | `(data?: any) => void` | `undefined` | Callback fired when checkout iframe and networks finish loading. |
@@ -402,7 +466,7 @@ Automatically mounts the official brand-standard Electric Blue pill button with 
 ```
 
 #### 3B. Programmatic Modal Launch (`openInsfersCheckout`)
-If triggering checkout programmatically from custom UI flows, ensure the trigger adheres to the official Electric Blue brand button standard (`#0000FF` background, white text, and white Insfers logo disc):
+If triggering checkout programmatically from custom UI flows:
 
 ```javascript
 import { openInsfersCheckout } from '@insfers/sdk/embed';
@@ -419,30 +483,47 @@ openInsfersCheckout({
 });
 ```
 
-
 ---
 
-## 5. LLM Function Calling / AI Tool Definitions
+## 5. LLM Function Calling & AI Agent Tool Calling
 
-Agents can directly expose Insfers payment capabilities to OpenAI, Claude, LangChain, or Vercel AI SDK using pre-packaged JSON tool schemas:
+The SDK exports pre-packaged tool schemas for **OpenAI**, **Anthropic Claude**, **Vercel AI SDK**, and **LangChain**.
+
+### Direct TypeScript Import (`@insfers/sdk/ai`)
+
+```typescript
+import { getOpenAITools, InsfersToolDefinitions } from '@insfers/sdk/ai';
+import OpenAI from 'openai';
+
+const openai = new OpenAI();
+
+// Pass pre-packaged Insfers tools directly to the model:
+const response = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Generate a payment link for $49 USDC.' }],
+  tools: getOpenAITools(),
+});
+```
+
+### JSON Schema Reference for AI Agents
 
 ```json
 [
   {
     "type": "function",
     "function": {
-      "name": "insfers_create_payment_link",
-      "description": "Create a multi-chain USDC checkout payment link for a customer or B2B client.",
+      "name": "create_payment_link",
+      "description": "Generate a multi-chain hosted checkout payment link for a customer with automatic deposit wallet provisioning.",
       "parameters": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "description": "Product or invoice title" },
+          "title": { "type": "string", "description": "Product or invoice title displayed to the customer" },
           "amount": { "type": "number", "description": "Amount in USDC (e.g. 49.00)" },
           "description": { "type": "string", "description": "Payment description or line items" },
           "acceptedNetworks": {
             "type": "array",
             "items": { "type": "string" },
-            "description": "Allowed networks (e.g. ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'SOLANA-DEVNET'])"
+            "description": "Allowed networks (e.g. ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'POLYGON-AMOY', 'ARB-SEPOLIA', 'SOLANA-DEVNET'])"
           }
         },
         "required": ["title", "amount"]
@@ -452,8 +533,8 @@ Agents can directly expose Insfers payment capabilities to OpenAI, Claude, LangC
   {
     "type": "function",
     "function": {
-      "name": "insfers_get_balances",
-      "description": "Check current treasury balances of USDC across all blockchains.",
+      "name": "get_balance_summary",
+      "description": "Retrieve live multi-chain USDC balances across all merchant treasury wallets.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -463,34 +544,32 @@ Agents can directly expose Insfers payment capabilities to OpenAI, Claude, LangC
   {
     "type": "function",
     "function": {
-      "name": "insfers_disburse_payout",
-      "description": "Send a USDC vendor payout or disbursement to an EVM wallet address.",
+      "name": "create_payment",
+      "description": "Initiate an on-chain USDC payment or transfer to a destination wallet on supported blockchains.",
       "parameters": {
         "type": "object",
         "properties": {
-          "recipientName": { "type": "string" },
-          "walletAddress": { "type": "string", "description": "Recipient 0x address" },
-          "amount": { "type": "number", "description": "Amount in USDC" },
-          "blockchain": { "type": "string", "default": "ARC-TESTNET" }
+          "destination": { "type": "string", "description": "Recipient EVM wallet address (0x...)" },
+          "amount": { "type": "number", "description": "Amount in USDC (e.g. 25.50)" },
+          "blockchain": { "type": "string", "description": "Target blockchain network (e.g. 'ARC-TESTNET', 'BASE-SEPOLIA')", "default": "ARC-TESTNET" },
+          "description": { "type": "string", "description": "Reason or memo for the payment" }
         },
-        "required": ["recipientName", "walletAddress", "amount"]
+        "required": ["destination", "amount"]
       }
     }
   },
   {
     "type": "function",
     "function": {
-      "name": "insfers_create_subscription_plan",
-      "description": "Create a recurring subscription plan (monthly, yearly, hourly).",
+      "name": "pay_402_challenge",
+      "description": "Autonomously resolve and settle an HTTP 402 Payment Required challenge on behalf of an AI agent.",
       "parameters": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "description": "Plan name" },
-          "price": { "type": "number", "description": "Billing cycle price in USDC" },
-          "interval": { "type": "string", "enum": ["HOURLY", "DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"] },
-          "trialDays": { "type": "number", "description": "Free trial days (optional)" }
+          "challengeHeader": { "type": "string", "description": "The raw x402 challenge header string from the protected resource response" },
+          "maxBudgetUsdc": { "type": "number", "description": "Maximum authorized budget limit in USDC for this payment" }
         },
-        "required": ["name", "price", "interval"]
+        "required": ["challengeHeader"]
       }
     }
   }
@@ -501,31 +580,49 @@ Agents can directly expose Insfers payment capabilities to OpenAI, Claude, LangC
 
 ## 6. Typed Error Handling
 
-Always wrap mutating SDK operations in a `try / catch` handling typed errors from `@insfers/sdk`:
+Always wrap mutating SDK operations in a `try / catch` handling typed errors exported from `@insfers/sdk`:
 
 ```typescript
 import Insfers, {
+  InsfersError,
   AuthenticationError,
-  RateLimitError,
+  PermissionError,
   InvalidRequestError,
   NotFoundError,
-  SecurityError,
-  APIError,
+  ConflictError,
+  RateLimitError,
+  APIConnectionError,
+  InternalServerError,
 } from '@insfers/sdk';
 
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
+
 try {
-  await insfers.paymentLinks.create({ ... });
+  await insfers.paymentLinks.create({
+    title: 'Enterprise Plan',
+    amount: 499.00,
+  });
 } catch (error) {
   if (error instanceof AuthenticationError) {
     console.error('Invalid or expired API Key. Verify INSFERS_API_KEY.');
   } else if (error instanceof RateLimitError) {
-    console.error('Rate limit reached. Automatically retried with backoff.');
+    console.error(`Rate limit reached. Retry after: ${error.retryAfter}s`);
   } else if (error instanceof InvalidRequestError) {
-    console.error('Invalid request parameters:', error.message);
-  } else if (error instanceof SecurityError) {
+    console.error(`Invalid request parameters (${error.param}):`, error.message);
+  } else if (error instanceof NotFoundError) {
+    console.error('Requested resource not found:', error.message);
+  } else if (error instanceof ConflictError) {
+    console.error('Idempotency or state conflict:', error.message);
+  } else if (error instanceof APIConnectionError) {
+    console.error('Network connectivity disruption or timeout:', error.message);
+  } else if (error instanceof InternalServerError) {
+    console.error(`Insfers server error [${error.statusCode}]:`, error.message);
+  } else if (error instanceof InsfersError) {
+    console.error(`Insfers error [${error.statusCode} / ${error.code}]:`, error.message);
+  } else if (error instanceof Error && error.message.includes('Security Error')) {
     console.error('CRITICAL: Core SDK executed in browser environment! Move to backend.');
-  } else if (error instanceof APIError) {
-    console.error(`Server error [${error.status}]:`, error.message);
+  } else {
+    console.error('Unexpected error:', error);
   }
 }
 ```
@@ -534,7 +631,7 @@ try {
 
 ## 7. Supported Networks Reference
 
-| Network Identifier | Chain Type | Settlement Speed | Asset |
+| Network Identifier | Chain Type | Settlement Speed | Primary Asset |
 | :--- | :--- | :--- | :--- |
 | `ARC-TESTNET` | Arc L1 (Primary) | Sub-second | USDC / EURC |
 | `BASE-SEPOLIA` | EVM L2 | ~2 seconds | USDC |

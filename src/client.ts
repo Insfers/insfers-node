@@ -84,11 +84,11 @@ export class Insfers {
       );
     }
 
-    // 3. Protocol Security Enforcement
+    // 3. Protocol Security Enforcement & Base URL Resolution
     const baseUrl =
       finalConfig.baseUrl ||
       (typeof process !== 'undefined' ? process.env.INSFERS_BASE_URL : undefined) ||
-      'https://develop.insfers.com';
+      'https://api.insfers.com';
     const isLocalhost =
       baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1') || baseUrl.includes('0.0.0.0');
 

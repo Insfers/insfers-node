@@ -13,7 +13,7 @@ import type { InsfersConfig, RequestOptions, ApiErrorEnvelope, PaginatedList, Li
 
 const DEFAULT_BASE_URL =
   (typeof process !== 'undefined' ? process.env.INSFERS_BASE_URL : undefined) ||
-  'https://develop.insfers.com';
+  'https://api.insfers.com';
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_VERSION = '1.0';

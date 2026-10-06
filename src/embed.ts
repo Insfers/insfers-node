@@ -25,9 +25,14 @@ function escapeHtml(str: string): string {
  * Loads the Bold weight from the Insfers checkout CDN — adds zero bytes to the SDK bundle.
  * Falls back gracefully to Inter → system fonts if the CDN is unreachable.
  */
-function ensureNeulisFontFace(): void {
+function ensureNeulisFontFace(overrideOrigin?: string): void {
   if (typeof document === 'undefined') return;
   if (document.getElementById('insfers-neulis-font')) return;
+  const defaultOrigin =
+    (typeof process !== 'undefined' && process.env?.INSFERS_CHECKOUT_URL
+      ? process.env.INSFERS_CHECKOUT_URL
+      : undefined) || 'https://checkout.insfers.com';
+  const origin = overrideOrigin || defaultOrigin;
   const style = document.createElement('style');
   style.id = 'insfers-neulis-font';
   style.textContent = `
@@ -36,7 +41,7 @@ function ensureNeulisFontFace(): void {
       font-weight: 700;
       font-style: normal;
       font-display: swap;
-      src: url("https://checkout.insfers.com/fonts/neulis-700.otf") format("opentype");
+      src: url("${origin}/fonts/neulis-700.otf") format("opentype");
     }
   `;
   document.head.appendChild(style);

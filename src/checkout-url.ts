@@ -37,9 +37,12 @@ export function resolveCheckoutUrl(link: string, baseUrl?: string): string {
   const trimmed = String(link ?? '').trim();
   const defaultHost =
     baseUrl ||
-    (typeof window !== 'undefined' && window.location.hostname.includes('localhost')
+    (typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? 'http://localhost:5173'
-      : 'https://checkout.insfers.com');
+      : (typeof process !== 'undefined' && process.env?.INSFERS_CHECKOUT_URL
+          ? process.env.INSFERS_CHECKOUT_URL
+          : undefined) || 'https://checkout.insfers.com');
 
   let token = trimmed;
   if (trimmed.includes('/pay/')) {
@@ -51,7 +54,19 @@ export function resolveCheckoutUrl(link: string, baseUrl?: string): string {
 
   let fullUrl: string;
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    fullUrl = trimmed;
+    if (baseUrl) {
+      try {
+        const parsed = new URL(trimmed);
+        const override = new URL(baseUrl);
+        parsed.protocol = override.protocol;
+        parsed.host = override.host;
+        fullUrl = parsed.toString();
+      } catch {
+        fullUrl = trimmed;
+      }
+    } else {
+      fullUrl = trimmed;
+    }
   } else {
     fullUrl = `${defaultHost.replace(/\/$/, '')}/pay/${token}`;
   }
