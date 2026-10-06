@@ -5,7 +5,7 @@ describe('Payment Links & Promo Acceptance', () => {
   let insfers: Insfers;
 
   beforeEach(() => {
-    insfers = new Insfers(apiKey, { baseUrl: 'https://develop.insfers.com' });
+    insfers = new Insfers(apiKey, { baseUrl: 'https://api.insfers.com' });
   });
 
   it('should format promo validation request properly', async () => {

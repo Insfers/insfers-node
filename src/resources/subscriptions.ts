@@ -109,4 +109,19 @@ export class SubscriptionsResource extends BaseResource {
       },
     );
   }
+
+  /**
+   * Returns a customer-facing portal URL for managing active subscriptions.
+   *
+   * @param walletAddress Optional customer EVM/Solana wallet address
+   * @param baseUrl Optional override for the subscriptions host (defaults to process.env.INSFERS_SUBSCRIPTIONS_URL or https://subscriptions.insfers.com)
+   */
+  getPortalUrl(walletAddress?: string, baseUrl?: string): string {
+    const defaultHost =
+      (typeof process !== 'undefined' && process.env?.INSFERS_SUBSCRIPTIONS_URL
+        ? process.env.INSFERS_SUBSCRIPTIONS_URL
+        : undefined) || 'https://subscriptions.insfers.com';
+    const host = (baseUrl || defaultHost).replace(/\/$/, '');
+    return walletAddress ? `${host}/portal/${walletAddress}` : `${host}/portal`;
+  }
 }

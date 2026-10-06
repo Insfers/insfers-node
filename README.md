@@ -79,7 +79,7 @@ import Insfers from '@insfers/sdk';
 // Automatically reads process.env.INSFERS_API_KEY, or configure explicitly
 const insfers = new Insfers({
   apiKey: process.env.INSFERS_API_KEY!,
-  baseUrl: process.env.INSFERS_BASE_URL || 'https://develop.insfers.com',
+  baseUrl: process.env.INSFERS_BASE_URL || 'https://api.insfers.com',
   timeout: 30000,   // 30s timeout
   maxRetries: 3,    // Auto retry on 429 and transient 5xx errors with exponential backoff
 });

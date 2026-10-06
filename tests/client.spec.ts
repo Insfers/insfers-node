@@ -16,9 +16,30 @@ describe('Insfers Client Initialization', () => {
     expect(client.agents).toBeDefined();
   });
 
-  it('initializes successfully with valid live/production API key', () => {
+  it('initializes successfully with valid API key and defaults to production API', () => {
     const client = new Insfers('sk_live_abcdef1234567890abcdef');
     expect(client).toBeInstanceOf(Insfers);
+    expect((client as any).http.baseUrl).toBe('https://api.insfers.com');
+
+    const testClient = new Insfers('sk_test_1234567890abcdef123456');
+    expect((testClient as any).http.baseUrl).toBe('https://api.insfers.com');
+  });
+
+  it('respects INSFERS_BASE_URL environment variable override', () => {
+    process.env.INSFERS_BASE_URL = 'https://custom-api.insfers.com';
+    try {
+      const client = new Insfers('sk_test_1234567890abcdef123456');
+      expect((client as any).http.baseUrl).toBe('https://custom-api.insfers.com');
+    } finally {
+      delete process.env.INSFERS_BASE_URL;
+    }
+  });
+
+  it('respects explicit baseUrl option override', () => {
+    const client = new Insfers('sk_test_1234567890abcdef123456', {
+      baseUrl: 'https://override-api.insfers.com',
+    });
+    expect((client as any).http.baseUrl).toBe('https://override-api.insfers.com');
   });
 
   it('throws AuthenticationError when API key is missing or empty', () => {
