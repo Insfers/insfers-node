@@ -1,13 +1,20 @@
 export interface ChainBalance {
-  blockchain: string;
-  walletAddress: string;
-  amount: number;
-  currency: string;
+  id?: string;
+  network?: string;
+  blockchain?: string;
+  walletAddress?: string;
+  amount?: number | null;
+  total?: number | null;
+  available?: number | null;
+  inEscrow?: number;
+  reserved?: number;
+  tokenBalances?: Record<string, number | null>;
+  currency?: string;
 }
 
 export interface BalanceSummary {
-  totalUsdc: number;
-  availableUsdc: number;
-  pendingUsdc: number;
+  totalUsdc?: number | null;
+  availableUsdc?: number | null;
+  pendingUsdc?: number;
   chains: ChainBalance[];
 }
