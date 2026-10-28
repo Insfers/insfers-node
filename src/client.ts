@@ -12,6 +12,7 @@ import { BalancesResource } from './resources/balances';
 import { PlansResource } from './resources/plans';
 import { SubscriptionsResource } from './resources/subscriptions';
 import { AgentCommerceResource } from './resources/agents';
+import { CatalogResource } from './resources/catalog';
 
 /**
  * Main client for interacting with the Insfers B2B Payments & Agentic Commerce platform.
@@ -22,10 +23,9 @@ import { AgentCommerceResource } from './resources/agents';
  *
  * const insfers = new Insfers(process.env.INSFERS_API_KEY!);
  *
- * // Create a payment link
+ * // Create a payment link from catalog
  * const link = await insfers.paymentLinks.create({
- *   title: 'Pro Plan Subscription',
- *   amount: 49.00,
+ *   catalogItemId: 'item_pro_annual',
  * });
  * console.log('Checkout URL:', link.url);
  * ```
@@ -41,6 +41,7 @@ export class Insfers {
   readonly plans: PlansResource;
   readonly subscriptions: SubscriptionsResource;
   readonly agents: AgentCommerceResource;
+  readonly catalog: CatalogResource;
 
   private readonly http: HttpClient;
 
@@ -100,7 +101,7 @@ export class Insfers {
 
     this.http = new HttpClient(trimmedKey, { ...finalConfig, baseUrl });
 
-    // Initialize all 9 core B2B resource modules + Agent commerce
+    // Initialize all 10 core B2B resource modules + Agent commerce
     this.payments = new PaymentsResource(this.http);
     this.paymentLinks = new PaymentLinksResource(this.http);
     this.customers = new CustomersResource(this.http);
@@ -111,5 +112,6 @@ export class Insfers {
     this.plans = new PlansResource(this.http);
     this.subscriptions = new SubscriptionsResource(this.http);
     this.agents = new AgentCommerceResource(this.http);
+    this.catalog = new CatalogResource(this.http);
   }
 }

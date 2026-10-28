@@ -7,3 +7,4 @@ export * from './invoices';
 export * from './payouts';
 export * from './balances';
 export * from './subscriptions';
+export * from './catalog';

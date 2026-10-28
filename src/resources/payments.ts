@@ -1,5 +1,6 @@
 import { BaseResource } from './base';
 import { listAutoPaging } from '../pagination';
+import { cleanDecimal } from '../utils';
 import type { RequestOptions, ListQuery, PaginatedList } from '../types/common';
 import type { CreatePaymentParams, Payment } from '../types/payments';
 
@@ -13,7 +14,7 @@ export class PaymentsResource extends BaseResource {
   async create(params: CreatePaymentParams, options?: RequestOptions): Promise<Payment> {
     const payload = {
       ...params,
-      amount: Number(Number(params.amount).toFixed(2)),
+      amount: cleanDecimal(params.amount),
     };
     return this.http.request<Payment>('/payments', {
       method: 'POST',

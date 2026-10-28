@@ -50,6 +50,10 @@ export const InsfersToolDefinitions = {
           type: 'number',
           description: 'Price in USDC.',
         },
+        catalogItemId: {
+          type: 'string',
+          description: 'Optional catalog item ID to link to this checkout session.',
+        },
         description: {
           type: 'string',
           description: 'Product description or details.',
@@ -61,6 +65,91 @@ export const InsfersToolDefinitions = {
         },
       },
       required: ['title', 'amount'],
+    },
+  },
+
+  /**
+   * Tool definition for creating a new product or subscription plan in the merchant catalog.
+   */
+  createCatalogItem: {
+    name: 'create_catalog_item',
+    description: 'Add a new product or recurring subscription plan to the merchant catalog with automated SKU generation and plan provisioning.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Display name of the product, service, or membership tier.',
+        },
+        categoryId: {
+          type: 'string',
+          description: 'Target catalog category UUID.',
+        },
+        sku: {
+          type: 'string',
+          description: 'Stock Keeping Unit identifier (e.g. PRO-ANNUAL-01). Auto-derived if omitted.',
+        },
+        price: {
+          type: 'number',
+          description: 'Price in USDC (e.g. 49.00). Minimum 0.30.',
+        },
+        currency: {
+          type: 'string',
+          enum: ['USDC', 'EURC'],
+          description: 'Token currency (default USDC; recurring subscription items must be USDC).',
+        },
+        type: {
+          type: 'string',
+          enum: ['PRODUCT', 'SERVICE'],
+          description: 'Item classification (default SERVICE).',
+        },
+        billingType: {
+          type: 'string',
+          enum: ['ONE_TIME', 'RECURRING'],
+          description: 'Whether this is a one-time purchase or recurring subscription.',
+        },
+        interval: {
+          type: 'string',
+          enum: ['HOURLY', 'DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'],
+          description: 'Billing cadence (required when billingType is RECURRING).',
+        },
+        trialDays: {
+          type: 'number',
+          description: 'Free trial duration in days for subscription items.',
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the product or plan features.',
+        },
+      },
+      required: ['name', 'categoryId', 'price'],
+    },
+  },
+
+  /**
+   * Tool definition for listing items and subscriptions from the catalog.
+   */
+  listCatalogItems: {
+    name: 'list_catalog_items',
+    description: 'Query products, services, and subscription plans in the merchant catalog.',
+    parameters: {
+      type: 'object',
+      properties: {
+        search: {
+          type: 'string',
+          description: 'Keyword search across SKU, title, and description.',
+        },
+        billingType: {
+          type: 'string',
+          enum: ['ONE_TIME', 'RECURRING'],
+          description: 'Filter by one-time or recurring subscription items.',
+        },
+        status: {
+          type: 'string',
+          enum: ['all', 'active', 'inactive'],
+          description: "Filter by active status ('active', 'inactive', 'all'). When omitted, returns all items.",
+        },
+      },
     },
   },
 
@@ -106,6 +195,8 @@ export function getOpenAITools() {
   return [
     { type: 'function', function: InsfersToolDefinitions.createPayment },
     { type: 'function', function: InsfersToolDefinitions.createPaymentLink },
+    { type: 'function', function: InsfersToolDefinitions.createCatalogItem },
+    { type: 'function', function: InsfersToolDefinitions.listCatalogItems },
     { type: 'function', function: InsfersToolDefinitions.getBalanceSummary },
     { type: 'function', function: InsfersToolDefinitions.pay402Challenge },
   ];

@@ -4,6 +4,8 @@ export interface InvoiceLineItem {
   quantity?: number;
   price?: number;
   unitPrice?: number;
+  catalogItemId?: string;
+  sku?: string;
 }
 
 export interface CreateInvoiceParams {
@@ -31,7 +33,13 @@ export interface Invoice {
   customerEmail?: string | null;
   invoiceNumber?: string;
   displayId?: string;
-  lineItems: Array<{ description: string; qty: number; price: number }>;
+  lineItems: Array<{
+    description: string;
+    qty: number;
+    price: number;
+    catalogItemId?: string | null;
+    sku?: string | null;
+  }>;
   subtotal: number;
   taxPercent?: number | null;
   total: number;

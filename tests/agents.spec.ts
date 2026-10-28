@@ -48,17 +48,19 @@ describe('AgentCommerceResource & x402 Protocol', () => {
         challenge: {
           amount: 15.0,
           recipientAddress: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
-          blockchain: 'BASE-SEPOLIA',
+          blockchain: 'ARC-TESTNET',
         },
-        maxBudgetUsdc: 5.0,
+        maxBudgetUsdc: 10.0,
       }),
     ).rejects.toThrow(InvalidRequestError);
   });
 
   it('exports valid OpenAI Tool definitions', () => {
     const tools = getOpenAITools();
-    expect(tools.length).toBe(4);
+    expect(tools.length).toBe(6);
     expect(InsfersToolDefinitions.createPayment.name).toBe('create_payment');
+    expect(InsfersToolDefinitions.createCatalogItem.name).toBe('create_catalog_item');
+    expect(InsfersToolDefinitions.listCatalogItems.name).toBe('list_catalog_items');
     expect(InsfersToolDefinitions.pay402Challenge.name).toBe('pay_402_challenge');
   });
 });

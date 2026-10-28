@@ -1,5 +1,6 @@
 import { BaseResource } from './base';
 import { listAutoPaging } from '../pagination';
+import { cleanDecimal } from '../utils';
 import type { RequestOptions, ListQuery, PaginatedList } from '../types/common';
 import type { CreatePaymentLinkParams, PaymentLink } from '../types/payment-links';
 
@@ -8,7 +9,7 @@ export class PaymentLinksResource extends BaseResource {
    * Generates a multi-chain hosted payment checkout link.
    * Provisions Circle deposit addresses per accepted network.
    *
-   * @param params Checkout link parameters including name/title, amount, and networks
+   * @param params Checkout link parameters including name/title, amount, networks, and optional catalogItemId
    * @param options Per-request options
    */
   async create(params: CreatePaymentLinkParams, options?: RequestOptions): Promise<PaymentLink> {
@@ -17,7 +18,7 @@ export class PaymentLinksResource extends BaseResource {
 
     const payload = {
       name: params.name || params.title || 'Payment Link',
-      amount: Number(Number(params.amount).toFixed(2)),
+      amount: cleanDecimal(params.amount),
       network: primaryNetwork,
       networks: allNetworks,
       description: params.description,
@@ -32,6 +33,7 @@ export class PaymentLinksResource extends BaseResource {
       interval: params.interval,
       trialDays: params.trialDays,
       gracePeriodDays: params.gracePeriodDays,
+      catalogItemId: params.catalogItemId,
     };
 
     const res = await this.http.request<any>('/payment-links', {
@@ -136,4 +138,3 @@ export class PaymentLinksResource extends BaseResource {
     );
   }
 }
-

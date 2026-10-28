@@ -21,6 +21,7 @@ The official **Node.js & TypeScript SDK** for [Insfers](https://insfers.com).
   - [Refunds & Claims](#6-refunds--claims)
   - [Treasury Balances](#7-treasury-balances)
   - [Subscriptions & Recurring Billing](#8-subscriptions--plans)
+  - [Merchant Catalog & Products](#9-merchant-catalog-products--subscriptions)
 - [B2B Checkout Suite (@insfers/sdk/react & @insfers/sdk/embed)](#b2b-checkout-suite-insferssdkreact--insferssdkembed)
 - [Autonomous Agent Commerce (x402 Protocol)](#autonomous-agent-commerce-x402-protocol)
 - [AI Tool Calling & LLM Integrations](#ai-tool-calling--llm-integrations)

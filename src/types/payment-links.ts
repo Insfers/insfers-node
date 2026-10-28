@@ -18,6 +18,7 @@ export interface CreatePaymentLinkParams {
   trialDays?: number;
   gracePeriodDays?: number;
   promoCode?: string;
+  catalogItemId?: string;
 }
 
 export interface ConfirmPaymentLinkParams {
@@ -35,10 +36,18 @@ export interface ValidatePromoResponse {
   code?: string;
   discountType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
   discountValue?: number;
-  discountedAmount?: number;
   duration?: 'FIRST_CYCLE' | 'FOREVER' | 'REPEATING' | string;
   durationCycles?: number | null;
+  originalAmount?: number;
+  discountedAmount?: number;
   savings?: number;
+  minimumApplied?: boolean;
+  warning?: string;
+  split?: {
+    grossAtomic: string;
+    feeAtomic: string;
+    netAtomic: string;
+  };
   promoCodeId?: string;
   message?: string;
 }
@@ -57,12 +66,16 @@ export interface PaymentLink {
   description?: string | null;
   amount: number;
   currency: string;
-  status: 'ACTIVE' | 'PAID' | 'EXPIRED' | 'CANCELLED' | string;
+  status: 'ACTIVE' | 'COMPLETED' | 'PAID' | 'EXPIRED' | 'CANCELLED' | string;
   type?: 'ONE_TIME' | 'RECURRING';
   planId?: string | null;
   interval?: string | null;
   trialDays?: number;
   gracePeriodDays?: number;
+  catalogItemId?: string | null;
+  sku?: string | null;
+  itemName?: string | null;
+  categoryName?: string | null;
   network?: string;
   chain?: string;
   networks?: Array<{
