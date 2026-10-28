@@ -1,5 +1,6 @@
 import { BaseResource } from './base';
 import { listAutoPaging } from '../pagination';
+import { cleanDecimal } from '../utils';
 import type { RequestOptions, ListQuery, PaginatedList } from '../types/common';
 import type { CreateInvoiceParams, SendReminderParams, Invoice } from '../types/invoices';
 
@@ -15,15 +16,19 @@ export class InvoicesResource extends BaseResource {
     const lineItems = rawItems.map((item) => ({
       description: item.description,
       qty: Number(item.qty ?? item.quantity ?? 1),
-      price: Number(Number(item.price ?? item.unitPrice ?? 0).toFixed(2)),
+      price: cleanDecimal(item.price ?? item.unitPrice ?? 0),
+      catalogItemId: item.catalogItemId,
+      sku: item.sku,
     }));
 
+    const address = params.address?.trim();
     const payload = {
       customerName: params.customerName || 'Valued Customer',
       customerEmail: params.customerEmail,
       dueDate: params.dueDate,
       lineItems,
-      address: params.address || '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+      // Omitted address: the API provisions the merchant wallet for this chain.
+      ...(address ? { address } : {}),
       network: params.network || 'arc',
       taxPercent: params.taxPercent !== undefined ? Number(params.taxPercent) : 0,
       currency: params.currency || 'USDC',
