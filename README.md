@@ -92,6 +92,7 @@ async function main() {
     amount: 499.00,
     acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'POLYGON-AMOY', 'ARB-SEPOLIA', 'SOLANA-DEVNET'],
     description: 'Instant USDC payment link with automated deposit provisioning',
+    expiresInDays: 30,
   });
 
   console.log('Payment Link ID:', link.id);
@@ -126,13 +127,14 @@ Initiate custodial USDC transfers on Arc and sync on-chain statuses across suppo
 // Create an on-chain transfer on Arc
 const payment = await insfers.payments.create({
   amount: 25.50,
-  destination: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+  destination: '<recipient-wallet>',
   blockchain: 'ARC-TESTNET',
   description: 'API Usage Tier Upgrade',
 });
 
-// Retrieve payment details
+// Retrieve payment details. The fee comes out of the amount paid.
 const retrieved = await insfers.payments.retrieve(payment.id);
+console.log(retrieved.merchantNetAmount, retrieved.platformFeeAmount, retrieved.platformFeeStatus);
 
 // Refresh on-chain settlement status
 const synced = await insfers.payments.sync(payment.id);
@@ -147,7 +149,7 @@ const paymentLink = await insfers.paymentLinks.create({
   amount: 1500.00,
   description: 'Monthly architectural review fee',
   acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA'],
-  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+  expiresInDays: 7,
 });
 
 console.log('Direct Checkout URL:', paymentLink.url);
@@ -161,7 +163,7 @@ Manage customer profiles and track aggregated spend history.
 const customer = await insfers.customers.create({
   name: 'Acme Corporation',
   email: 'finance@acme.corp',
-  walletAddress: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+  walletAddress: '<recipient-wallet>',
 });
 
 // Retrieve customer with transaction history
@@ -173,15 +175,18 @@ console.log('Total Spent:', profile.totalSpent);
 Generate invoices with calculated line items, dispatches reminder emails, and download binary PDF buffers.
 
 ```typescript
-// Create an invoice
+// Create an invoice. Omit address so the API provisions the merchant wallet.
+// dueDate is a UTC calendar day. The customer pays invoice.total (subtotal plus tax).
 const invoice = await insfers.invoices.create({
-  customerId: 'cust_123',
-  items: [
-    { description: 'Cloud API Compute (Hours)', quantity: 120, unitPrice: 2.50 },
-    { description: 'Dedicated IP Gateway', quantity: 1, unitPrice: 50.00 },
+  customerName: 'Acme Global Corp',
+  customerEmail: 'billing@acme.corp',
+  dueDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+  lineItems: [
+    { description: 'Cloud API Compute (Hours)', qty: 120, price: 2.50, catalogItemId: 'item_uuid' },
+    { description: 'Dedicated IP Gateway', qty: 1, price: 50.00 },
   ],
-  dueDate: '2026-09-15',
-  autoSendEmail: true,
+  taxPercent: 5,
+  network: 'ARC-TESTNET',
 });
 
 // Download binary PDF buffer
@@ -196,7 +201,7 @@ Programmatically disburse USDC to vendor or contractor wallets.
 ```typescript
 const payout = await insfers.payouts.create({
   amount: 250.00,
-  recipientAddress: '0x1234567890123456789012345678901234567890',
+  recipientAddress: '<recipient-wallet>',
   blockchain: 'BASE-SEPOLIA',
   description: 'August Bounty Payout',
 });
@@ -208,12 +213,15 @@ console.log('Payout Status:', payout.status);
 Issue on-chain USDC refunds directly or generate customer self-claim refund links.
 
 ```typescript
-// Create a customer claimable refund link
+// Refund at most the merchant net. Omitting type sends a direct refund.
+const refundable = await insfers.refunds.getRefundable('pay_123');
+const amount = Math.min(75.00, refundable.maxRefundable);
+
 const refund = await insfers.refunds.create({
   paymentId: 'pay_123',
-  amount: 75.00,
+  amount,
+  type: 'CLAIMABLE',
   reason: 'Customer requested refund',
-  claimable: true,
 });
 
 console.log('Claim Token:', refund.claimToken);
@@ -241,9 +249,10 @@ Create recurring subscription plans and manage subscriber lifecycle.
 // Create a billing plan
 const plan = await insfers.plans.create({
   name: 'Developer Pro',
-  amount: 49.00,
-  billingInterval: 'monthly',
-  features: ['10,000 API Requests', 'Dedicated Webhook Delivery'],
+  price: 49.00,
+  interval: 'MONTHLY',
+  trialDays: 14,
+  description: 'Full platform access with a 14-day trial',
 });
 
 // Manage subscriptions
@@ -251,6 +260,42 @@ const subs = await insfers.subscriptions.list();
 await insfers.subscriptions.pause(subs[0].id);
 await insfers.subscriptions.resume(subs[0].id);
 ```
+
+### 9. Merchant Catalog Products & Subscriptions
+Create a category, then a one-time or recurring item. Price minimum is 0.30 USDC. A recurring item must be USDC and needs `interval`. Call `suggestSku` before create: an omitted SKU is only a local slug and a duplicate returns 409.
+
+```typescript
+const category = await insfers.catalog.categories.create({
+  name: 'SaaS Software',
+  color: '#0000FF',
+});
+
+const sku = await insfers.catalog.suggestSku('Pro Subscription');
+const item = await insfers.catalog.items.create({
+  name: 'Pro Subscription',
+  categoryId: category.id,
+  sku: sku.sku,
+  price: 49.00,
+  currency: 'USDC',
+  billingType: 'RECURRING',
+  interval: 'MONTHLY',
+  trialDays: 14,
+});
+
+// A recurring catalog checkout must use the catalog price.
+const link = await insfers.paymentLinks.create({
+  title: item.name,
+  amount: item.price,
+  catalogItemId: item.id,
+  expiresInDays: 30,
+});
+
+const summary = await insfers.catalog.summary();
+const performance = await insfers.catalog.performance();
+console.log(summary.categories, performance.items[0]?.sku, link.url);
+```
+
+`summary` returns `totalItems`, `activeItems`, `categories` (a count), `revenueByCurrency`, and `topPerformer`. `performance()` returns `{ items }`. An invoice stamps `catalogItemId` on the payment only when every line is that same one-time item.
 
 ---
 
@@ -426,7 +471,7 @@ To protect against duplicate charges or payouts caused by network timeouts, all 
 const payment = await insfers.payments.create(
   {
     amount: 100.00,
-    destination: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    destination: '<recipient-wallet>',
   },
   {
     idempotencyKey: `order_${order.id}`, // Guaranteed at-most-once execution
@@ -486,6 +531,8 @@ try {
 1. **Keep Keys on the Server**: Never embed `sk_live_...` or `sk_test_...` in frontend browser applications or client mobile code.
 2. **Environment Variables**: Always store keys in secure environment variables (`process.env.INSFERS_API_KEY`).
 3. **Use Test Keys in Staging**: Always test integrations using `sk_test_...` before deploying `sk_live_...` keys to production.
+4. **Budget every agent payment**: `insfers.agents.pay402` requires `maxBudgetUsdc` and will not pay a 402 challenge without it.
+5. **Replace sample wallets**: `<recipient-wallet>` is a placeholder. Put in the real destination before sending funds.
 
 ## Support & Feedback
 

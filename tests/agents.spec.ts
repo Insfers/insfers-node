@@ -42,6 +42,18 @@ describe('AgentCommerceResource & x402 Protocol', () => {
     expect(parsed.resourceUri).toBe('https://api.agentdata.com/v1/search');
   });
 
+  it('requires maxBudgetUsdc before paying a 402 challenge', async () => {
+    await expect(
+      agents.pay402({
+        challenge: {
+          amount: 1,
+          recipientAddress: '0x1111111111111111111111111111111111111111',
+          blockchain: 'ARC-TESTNET',
+        },
+      } as any),
+    ).rejects.toThrow(/maxBudgetUsdc is required/);
+  });
+
   it('throws InvalidRequestError if x402 challenge amount exceeds maxBudgetUsdc', async () => {
     await expect(
       agents.pay402({
@@ -62,5 +74,9 @@ describe('AgentCommerceResource & x402 Protocol', () => {
     expect(InsfersToolDefinitions.createCatalogItem.name).toBe('create_catalog_item');
     expect(InsfersToolDefinitions.listCatalogItems.name).toBe('list_catalog_items');
     expect(InsfersToolDefinitions.pay402Challenge.name).toBe('pay_402_challenge');
+    expect(InsfersToolDefinitions.pay402Challenge.parameters.required).toEqual([
+      'challengeHeader',
+      'maxBudgetUsdc',
+    ]);
   });
 });
