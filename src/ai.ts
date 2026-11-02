@@ -183,7 +183,7 @@ export const InsfersToolDefinitions = {
           description: 'Maximum authorized budget limit in USDC for this payment.',
         },
       },
-      required: ['challengeHeader'],
+      required: ['challengeHeader', 'maxBudgetUsdc'],
     },
   },
 };

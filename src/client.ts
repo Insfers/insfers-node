@@ -90,8 +90,13 @@ export class Insfers {
       finalConfig.baseUrl ||
       (typeof process !== 'undefined' ? process.env.INSFERS_BASE_URL : undefined) ||
       'https://api.insfers.com';
-    const isLocalhost =
-      baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1') || baseUrl.includes('0.0.0.0');
+    let isLocalhost = false;
+    try {
+      const host = new URL(baseUrl).hostname;
+      isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '[::1]' || host === '::1';
+    } catch {
+      isLocalhost = false;
+    }
 
     if (!baseUrl.startsWith('https://') && !isLocalhost) {
       throw new InvalidRequestError(

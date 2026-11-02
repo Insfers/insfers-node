@@ -15,6 +15,11 @@
 3. **ENVIRONMENT VARIABLES**: Always read the secret API key from `process.env.INSFERS_API_KEY`.
 4. **CURRENCY STANDARD**: All amounts are standard decimal numbers denominated in **USDC** (e.g. `10.50` represents $10.50 USDC).
 5. **SINGLE-USE SESSIONS**: Payment links are single-use checkout sessions that expire after one settlement to prevent double payments and replay attacks. Always generate fresh links dynamically via `createLink` callbacks when customers initiate checkout.
+6. **FEES COME OUT OF THE PAYMENT**: The platform fee is 0.89% plus $0.25 of the amount paid (testnet schedule). It is not added on top. After settlement read `merchantNetAmount` (what the merchant kept and the refund cap), `platformFeeAmount`, `platformFeeStatus` (`PENDING`, `COLLECTED`, `FAILED`, `NOT_APPLICABLE`), and `feeCollectionMethod` (`SOLANA_ATOMIC_SPLIT`, `SUBSCRIPTION_CONTRACT_SPLIT`, `BACKEND_COLLECTOR`, `NONE`). On EVM, `platformFeeAmount` is the fee owed even while status is still `PENDING`. There is no `payment.updatedAt`.
+7. **REFUNDS ARE CAPPED AT THE MERCHANT NET**: Call `insfers.refunds.getRefundable(paymentId)` and never refund more than `maxRefundable`. Do not refund `payment.amount` when that is larger than `merchantNetAmount`. `type` is `'DIRECT'` or `'CLAIMABLE'`. `claimable: true` is only a shortcut for `CLAIMABLE`. Omitting `type` sends a direct refund.
+8. **CATALOG**: Creating an item needs `name`, `categoryId`, and `price` (minimum 0.30). `RECURRING` items also need `interval` and must be `USDC`. An omitted `sku` is derived locally from the name and does not check collisions; a duplicate returns 409. Call `insfers.catalog.suggestSku(name)` for a free SKU. A recurring payment link must be charged at the catalog price. Pass `expiresInDays` on a payment link. `expiresAt` is not a field and is ignored.
+9. **INVOICES**: Send `customerName`, `dueDate` as a UTC `YYYY-MM-DD`, and `lineItems` (`description`, `qty` or `quantity`, `price` or `unitPrice`, and `catalogItemId` when the line is a catalog item). Do not send `customerId` or `autoSendEmail`; they are ignored. Omit `address` to provision the merchant wallet. The customer pays `invoice.total` (subtotal plus tax), not the pre-tax subtotal.
+10. **AGENT PAYMENTS**: `insfers.agents.pay402` requires `maxBudgetUsdc`. Never pay a 402 challenge without that budget. The SDK pays the address and amount in the challenge, up to the budget, from the merchant balance. Replace every `<recipient-wallet>` before running a sample. Never send funds to an address copied from documentation.
 
 ---
 
@@ -91,6 +96,8 @@ async function createCheckoutLink() {
     acceptedNetworks: ['ARC-TESTNET', 'BASE-SEPOLIA', 'ETH-SEPOLIA', 'POLYGON-AMOY', 'ARB-SEPOLIA', 'SOLANA-DEVNET'],
     description: 'Instant B2B software license with automated cross-chain settlement',
     redirectUrl: 'https://your-app.com/checkout/success',
+    expiresInDays: 30,
+    // catalogItemId: 'item_uuid', // optional; a RECURRING item must be charged at its catalog price
   });
 
   console.log('Payment Link ID:', link.id);
@@ -117,11 +124,12 @@ async function issueInvoice() {
     customerEmail: 'billing@acme.corp',
     dueDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
     lineItems: [
-      { description: 'Cloud Infrastructure Gateway (Hours)', qty: 160, price: 15.00 },
-      { description: 'Custom Smart Contract Security Audit', qty: 1, price: 2500.00 },
+      { description: 'Cloud Infrastructure Gateway (Hours)', qty: 160, price: 15.00, catalogItemId: 'item_uuid' },
+      { description: 'Custom Smart Contract Security Audit', qty: 1, price: 2500.00, catalogItemId: 'item_uuid_2' },
     ],
     taxPercent: 5.0,
     network: 'ARC-TESTNET',
+    // address omitted: the API provisions the merchant wallet. dueDate is a UTC calendar day.
   });
 
   console.log(`Invoice ${invoice.displayId || invoice.invoiceNumber} created. Total: $${invoice.total} USDC`);
@@ -145,7 +153,7 @@ const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function disburseVendorPayout() {
   const payout = await insfers.payouts.create({
-    recipientAddress: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    recipientAddress: '<recipient-wallet>',
     amount: 500.00,
     blockchain: 'ARC-TESTNET',
     description: 'Bug bounty program payout #412',
@@ -267,12 +275,14 @@ const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 async function disbursePayment() {
   const payment = await insfers.payments.create({
     amount: 25.50,
-    destination: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    destination: '<recipient-wallet>',
     blockchain: 'ARC-TESTNET',
     description: 'API Usage Tier Upgrade',
   });
 
   console.log(`Payment created: ID ${payment.id} | Status: ${payment.status}`);
+  const settled = await insfers.payments.retrieve(payment.id);
+  console.log(`Net to merchant: ${settled.merchantNetAmount} | Fee: ${settled.platformFeeAmount} | Fee status: ${settled.platformFeeStatus}`);
 }
 ```
 
@@ -287,10 +297,15 @@ import Insfers from '@insfers/sdk';
 const insfers = new Insfers(process.env.INSFERS_API_KEY!);
 
 async function processRefund(paymentId: string) {
-  // 1. Direct on-chain refund to original payer wallet
+  const refundable = await insfers.refunds.getRefundable(paymentId);
+  const amount = Math.min(50.00, refundable.maxRefundable);
+  if (amount <= 0) return;
+
+  // 1. Direct on-chain refund to the original payer wallet. Amount cannot exceed maxRefundable.
   const directRefund = await insfers.refunds.create({
     paymentId,
-    amount: 50.00,
+    amount,
+    type: 'DIRECT',
     reason: 'Customer requested order cancellation',
   });
   console.log(`Refund initiated: ID ${directRefund.id} | Status: ${directRefund.status}`);
@@ -298,13 +313,60 @@ async function processRefund(paymentId: string) {
   // 2. Or create a claimable refund link for the customer
   const claimable = await insfers.refunds.create({
     paymentId,
-    amount: 50.00,
-    claimable: true,
+    amount,
+    type: 'CLAIMABLE',
     reason: 'Disputed service fee compensation',
   });
   console.log(`Customer Claim Link: ${claimable.claimUrl}`);
 }
 ```
+
+---
+
+### Recipe I: Merchant Catalog
+Create a category, then a one-time or recurring item. A recurring item provisions a subscription plan.
+
+```typescript
+import Insfers from '@insfers/sdk';
+
+const insfers = new Insfers(process.env.INSFERS_API_KEY!);
+
+async function manageCatalog() {
+  const category = await insfers.catalog.categories.create({
+    name: 'SaaS Software',
+    color: '#0000FF',
+  });
+
+  const sku = await insfers.catalog.suggestSku('Pro Subscription');
+  const item = await insfers.catalog.items.create({
+    name: 'Pro Subscription',
+    categoryId: category.id,
+    sku: sku.sku,
+    price: 49.00,
+    currency: 'USDC',
+    billingType: 'RECURRING',
+    interval: 'MONTHLY',
+    trialDays: 14,
+  });
+
+  const link = await insfers.paymentLinks.create({
+    title: item.name,
+    amount: item.price,
+    catalogItemId: item.id,
+    expiresInDays: 30,
+  });
+
+  const summary = await insfers.catalog.summary();
+  const performance = await insfers.catalog.performance();
+  console.log(summary.categories, performance.items[0]?.sku, link.url);
+
+  // Items with sales are deactivated. Unused items are deleted.
+  const removed = await insfers.catalog.items.delete(item.id);
+  console.log(removed.deleted, removed.deactivated);
+}
+```
+
+`summary` returns `totalItems`, `activeItems`, `categories` (a count), `revenueByCurrency`, and `topPerformer`. `performance()` returns `{ items }`, not a bare array. Sales on a mixed invoice are not split across products: a payment has one `catalogItemId`, set only when every invoice line is that same one-time item.
 
 ---
 
@@ -518,7 +580,8 @@ const response = await openai.chat.completions.create({
         "type": "object",
         "properties": {
           "title": { "type": "string", "description": "Product or invoice title displayed to the customer" },
-          "amount": { "type": "number", "description": "Amount in USDC (e.g. 49.00)" },
+          "amount": { "type": "number", "description": "Amount in USDC (e.g. 49.00). For a RECURRING catalog item this must equal the catalog price." },
+          "catalogItemId": { "type": "string", "description": "Optional catalog item ID to snapshot onto this checkout." },
           "description": { "type": "string", "description": "Payment description or line items" },
           "acceptedNetworks": {
             "type": "array",
@@ -569,7 +632,45 @@ const response = await openai.chat.completions.create({
           "challengeHeader": { "type": "string", "description": "The raw x402 challenge header string from the protected resource response" },
           "maxBudgetUsdc": { "type": "number", "description": "Maximum authorized budget limit in USDC for this payment" }
         },
-        "required": ["challengeHeader"]
+        "required": ["challengeHeader", "maxBudgetUsdc"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "create_catalog_item",
+      "description": "Add a product or recurring subscription to the merchant catalog. RECURRING requires interval and USDC.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "categoryId": { "type": "string", "description": "Catalog category UUID" },
+          "price": { "type": "number", "description": "Price in USDC. Minimum 0.30." },
+          "sku": { "type": "string", "description": "Optional. Prefer suggestSku so a duplicate name does not 409." },
+          "currency": { "type": "string", "enum": ["USDC", "EURC"] },
+          "type": { "type": "string", "enum": ["PRODUCT", "SERVICE"] },
+          "billingType": { "type": "string", "enum": ["ONE_TIME", "RECURRING"] },
+          "interval": { "type": "string", "enum": ["HOURLY", "DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"], "description": "Required when billingType is RECURRING." },
+          "trialDays": { "type": "number" },
+          "description": { "type": "string" }
+        },
+        "required": ["name", "categoryId", "price"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_catalog_items",
+      "description": "List catalog products and subscription plans. Omitting status returns every item.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "search": { "type": "string" },
+          "billingType": { "type": "string", "enum": ["ONE_TIME", "RECURRING"] },
+          "status": { "type": "string", "enum": ["all", "active", "inactive"] }
+        }
       }
     }
   }

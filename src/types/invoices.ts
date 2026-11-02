@@ -11,7 +11,6 @@ export interface InvoiceLineItem {
 export interface CreateInvoiceParams {
   customerName?: string;
   customerEmail?: string;
-  customerId?: string;
   dueDate: string;
   lineItems?: InvoiceLineItem[];
   items?: InvoiceLineItem[];

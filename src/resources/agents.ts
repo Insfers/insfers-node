@@ -38,8 +38,9 @@ export interface Pay402Params {
 
   /**
    * Maximum budget in USDC the agent is authorized to spend on this single challenge.
+   * Required. The SDK refuses the payment when this is omitted.
    */
-  maxBudgetUsdc?: number;
+  maxBudgetUsdc: number;
 
   /**
    * Optional description or agent task reference.
@@ -118,7 +119,7 @@ export class AgentCommerceResource extends BaseResource {
    * @example
    * ```typescript
    * const payment = await insfers.agents.pay402({
-   *   challenge: 'amount=0.10,address=0x742d35Cc6634C0532925a3b844Bc454e4438f44e,network=BASE-SEPOLIA',
+   *   challenge: 'amount=0.10,address=<recipient wallet>,network=BASE-SEPOLIA',
    *   maxBudgetUsdc: 1.00,
    *   description: 'LLM context retrieval payment',
    * });
@@ -130,7 +131,13 @@ export class AgentCommerceResource extends BaseResource {
         ? this.parse402Header(params.challenge)
         : params.challenge;
 
-    if (params.maxBudgetUsdc !== undefined && challenge.amount > params.maxBudgetUsdc) {
+    if (params.maxBudgetUsdc == null || !Number.isFinite(params.maxBudgetUsdc) || params.maxBudgetUsdc < 0) {
+      throw new InvalidRequestError('maxBudgetUsdc is required for an agent payment.', {
+        code: 'budget_required',
+        param: 'maxBudgetUsdc',
+      });
+    }
+    if (challenge.amount > params.maxBudgetUsdc) {
       throw new InvalidRequestError(
         `x402 challenge amount (${challenge.amount} USDC) exceeds agent maximum budget (${params.maxBudgetUsdc} USDC).`,
         { code: 'budget_exceeded', param: 'maxBudgetUsdc' },

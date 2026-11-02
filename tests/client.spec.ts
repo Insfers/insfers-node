@@ -61,11 +61,39 @@ describe('Insfers Client Initialization', () => {
     ).toThrow(InvalidRequestError);
   });
 
+  it('rejects HTTP when the host only contains the letters localhost', () => {
+    expect(
+      () =>
+        new Insfers('sk_test_1234567890abcdef', {
+          baseUrl: 'http://localhost.evil.example',
+        }),
+    ).toThrow(InvalidRequestError);
+  });
+
+  it('rejects HTTP when 127.0.0.1 is only a label prefix', () => {
+    expect(
+      () =>
+        new Insfers('sk_test_1234567890abcdef', {
+          baseUrl: 'http://127.0.0.1.evil.example',
+        }),
+    ).toThrow(InvalidRequestError);
+  });
+
   it('allows HTTP baseUrl for localhost / 127.0.0.1 development', () => {
     const client = new Insfers('sk_test_1234567890abcdef', {
       baseUrl: 'http://localhost:3000',
     });
     expect(client).toBeInstanceOf(Insfers);
+
+    const loopback = new Insfers('sk_test_1234567890abcdef', {
+      baseUrl: 'http://127.0.0.1:3000',
+    });
+    expect(loopback).toBeInstanceOf(Insfers);
+
+    const ipv6 = new Insfers('sk_test_1234567890abcdef', {
+      baseUrl: 'http://[::1]:3000',
+    });
+    expect(ipv6).toBeInstanceOf(Insfers);
   });
 
   it('throws a security error if instantiated in browser environment', () => {
